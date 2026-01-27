@@ -41,32 +41,42 @@ const db = {}; // Declare db variable
 /* ================= DATABASE ================= */
 
 const getDB = async (ctxOrId) => {
+  try {
     const userId = typeof ctxOrId === 'object' ? ctxOrId.from.id : ctxOrId;
 
-    const { data } = await supabase
-        .from('users')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
+    const { data, error } = await supabase
+      .from('users')
+      .select('user_id, points, referrals, referred_by, joined, name, username')
+      .eq('user_id', userId)
+      .single();
 
-    if (data) return data;
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // User not found, create new user
+        const ctx = typeof ctxOrId === 'object' ? ctxOrId : null;
+        const newUser = {
+          user_id: userId,
+          points: 0,
+          referrals: 0,
+          referred_by: null,
+          joined: new Date(),
+          name: ctx?.from?.first_name || 'User',
+          username: ctx?.from?.username ? `@${ctx.from.username}` : 'No Username'
+        };
 
-    const ctx = typeof ctxOrId === 'object' ? ctxOrId : null;
+        const { error: insertError } = await supabase.from('users').insert([newUser]);
+        if (insertError) throw insertError;
+        return newUser;
+      }
+      throw error;
+    }
 
-    const newUser = {
-        user_id: userId,
-        points: 0,
-        referrals: 0,
-        referred_by: null,
-        joined: new Date(),
-        name: ctx?.from?.first_name || 'User',
-        username: ctx?.from?.username ? `@${ctx.from.username}` : 'No Username'
-    };
-
-    await supabase.from('users').insert(newUser);
-    return newUser;
+    return data;
+  } catch (err) {
+    console.error('[DB] Error fetching/creating user:', err.message);
+    throw err;
+  }
 };
-
 /* ================= KEYBOARDS ================= */
 
 const getMenu = (ctx) => {
