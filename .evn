@@ -1,2 +1,8 @@
+# Telegram Bot Configuration
+# Replace with your actual bot token from @BotFather
 BOT_TOKEN=8539976683:AAFGvM_GdKbZmR6zFxZolY-jqFak1-KpWe4
+# Supabase Configuration
+# Replace with your actual Supabase credentials
+SUPABASE_URL=https://vzaqpmbfqusozwsxpxzm.supabase.co
+SUPABASE_KEY=sb_publishable_********
 ADMIN_ID=5522724001
