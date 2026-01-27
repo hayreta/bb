@@ -1,16 +1,30 @@
 import { Telegraf, Markup, session } from 'telegraf';
 import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+
+// Load environment variables from .env file
+dotenv.config();
 
 /* ================= CONFIG ================= */
 
-const BOT_TOKEN = process.env.BOT_TOKEN; // ⚠️ keep token in env
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const ADMIN_ID = 5522724001;
 const BOT_USERNAME = 'createUnlimitedGmail_Bot';
 
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_KEY
-);
+// Validate required environment variables
+if (!BOT_TOKEN) {
+    console.error('ERROR: BOT_TOKEN is not set. Please add it to your .env file or environment variables.');
+    process.exit(1);
+}
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+    console.error('ERROR: SUPABASE_URL and SUPABASE_KEY are required. Please add them to your .env file or environment variables.');
+    process.exit(1);
+}
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const bot = new Telegraf(BOT_TOKEN);
 bot.use(session());
