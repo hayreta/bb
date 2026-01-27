@@ -22,6 +22,8 @@ const CHANNELS = [
     '@Canva_Pro_Teams_Links'
 ];
 
+const db = {}; // Declare db variable
+
 /* ================= DATABASE ================= */
 
 const getDB = async (ctxOrId) => {
@@ -70,6 +72,10 @@ const adminKeyboard = Markup.keyboard([
     ['➕ Add Points', '➖ Remove Points'],
     ['👥 List All Users', '⬅️ Back to User Menu']
 ]).resize();
+
+const cancelKeyboard = Markup.keyboard([
+    ['❌ Cancel Operation']
+]).resize(); // Declare cancelKeyboard variable
 
 /* ================= FORCE JOIN ================= */
 
@@ -179,38 +185,10 @@ Invite friends to earn points!`,
     );
 });
 
-// --- START COMMAND ---
-bot.start(checkJoin, async (ctx) => {
-    const user = getDB(ctx);
-    const refId = ctx.payload;
-
-    // Referral Logic
-    if (refId && refId != ctx.from.id && !user.referredBy) {
-        user.referredBy = refId;
-        const referrer = getDB(refId); 
-        if (referrer) {
-            referrer.points += 1; 
-            referrer.referrals += 1;
-            try {
-                await bot.telegram.sendMessage(refId, `🔔 *Referral Alert!*\nNew user earned +1 Point.`, { parse_mode: 'Markdown' });
-            } catch (e) {}
-        }
-    }
-
-    await ctx.replyWithPhoto(
-        { url: 'https://hayre32.wordpress.com/wp-content/uploads/2026/01/image_2026-01-24_114307874.png' }, 
-        {
-            caption: `👋 *Welcome to ❝𝕏-𝐇𝐮𝐧𝐭𝐞𝐫❞*\n\n👤 **User:** ${user.name}\n💰 **Starting Balance:** \`0 Points\`\n\nInvite friends to earn points!`,
-            parse_mode: 'Markdown',
-            ...getMenu(ctx)
-        }
-    );
-});
-
 // --- MAIN MENU HANDLERS ---
 
 bot.hears('➕ Register New Gmail', checkJoin, async (ctx) => {
-    const user = getDB(ctx);
+    const user = await getDB(ctx);
     
     if (user.points < 5) {
         const needed = 5 - user.points;
@@ -252,8 +230,8 @@ _Example: yourname@gmail.com_
     ctx.replyWithMarkdown(preview, cancelKeyboard);
 });
 
-bot.hears('⚙️ Account', (ctx) => {
-    const user = getDB(ctx);
+bot.hears('⚙️ Account', async (ctx) => {
+    const user = await getDB(ctx);
     ctx.replyWithMarkdown(
         `⭐ *PREMIUM ACCOUNT STATUS*\n` +
         `━━━━━━━━━━━━━━━━━━\n` +
@@ -266,8 +244,8 @@ bot.hears('⚙️ Account', (ctx) => {
     );
 });
 
-bot.hears('🚸 My Referrals', (ctx) => {
-    const user = getDB(ctx); 
+bot.hears('🚸 My Referrals', async (ctx) => {
+    const user = await getDB(ctx); 
     const link = `https://t.me/${BOT_USERNAME}?start=${ctx.from.id}`;
     const totalEarned = (user.referrals || 0) * 1;
 
@@ -303,7 +281,7 @@ bot.action('main_menu', async (ctx) => {
 });
 
 bot.action('show_referral_link', async (ctx) => {
-    const user = getDB(ctx);
+    const user = await getDB(ctx);
     const link = `https://t.me/${BOT_USERNAME}?start=${ctx.from.id}`;
     
     try {
@@ -323,7 +301,7 @@ bot.action('show_referral_link', async (ctx) => {
 });
 
 bot.action('refresh_ref', async (ctx) => {
-    const user = getDB(ctx);
+    const user = await getDB(ctx);
     const link = `https://t.me/${BOT_USERNAME}?start=${ctx.from.id}`;
     const totalEarned = (user.referrals || 0) * 1;
     
@@ -359,30 +337,27 @@ bot.action('main_menu', async (ctx) => {
     await ctx.reply("Returning to Main Menu...", getMenu(ctx));
 });
 
-bot.action('refresh_ref', async (ctx) => {
-    const user = getDB(ctx);
-    const link = `https://t.me/${BOT_USERNAME}?start=${ctx.from.id}`;
-    const totalEarned = (user.referrals || 0) * 1;
+const link = `https://t.me/${BOT_USERNAME}?start=${ctx.from.id}`;
+const totalEarned = (user.referrals || 0) * 1;
     
-    await ctx.answerCbQuery("Stats Updated! ✅");
-    await ctx.editMessageText(
-        `✨ **𝕏-𝐇𝐔𝐍𝐓𝐄𝐑 AFFILIATE CENTER** ✨\n` +
-        `━━━━━━━━━━━━━━━━━━\n` +
-        `👤 **User:** ${user.name}\n` +
-        `👥 **Total Referrals:** \`${user.referrals || 0}\`\n` +
-        `💰 **Total Earned:** \`${totalEarned} Points\`\n` +
-        `━━━━━━━━━━━━━━━━━━\n` +
-        `🎁 **Reward:** \`1 Point\` per join!\n\n` +
-        `🔗 **Your Unique Link:**\n\`${link}\``,
-        {
-            parse_mode: 'Markdown',
-            ...Markup.inlineKeyboard([
-                [Markup.button.url("📤 Share Invite Link", `https://t.me/share/url?url=${encodeURIComponent(link)}`)],
-                [Markup.button.callback("📊 Refresh Stats", "refresh_ref"), Markup.button.callback("🔙 Back", "main_menu")]
-            ])
-        }
-    );
-});
+await ctx.answerCbQuery("Stats Updated! ✅");
+await ctx.editMessageText(
+    `✨ **𝕏-𝐇𝐔𝐍𝐓𝐄𝐑 AFFILIATE CENTER** ✨\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `👤 **User:** ${user.name}\n` +
+    `👥 **Total Referrals:** \`${user.referrals || 0}\`\n` +
+    `💰 **Total Earned:** \`${totalEarned} Points\`\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `🎁 **Reward:** \`1 Point\` per join!\n\n` +
+    `🔗 **Your Unique Link:**\n\`${link}\``,
+    {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+            [Markup.button.url("📤 Share Invite Link", `https://t.me/share/url?url=${encodeURIComponent(link)}`)],
+            [Markup.button.callback("📊 Refresh Stats", "refresh_ref"), Markup.button.callback("🔙 Back", "main_menu")]
+        ])
+    }
+);
 
 // --- HELP MESSAGE HANDLER ---
 bot.hears('🏥 Help', async (ctx) => {
@@ -838,7 +813,7 @@ ${formatted || 'No recent actions'}
                 await new Promise(resolve => setTimeout(resolve, 2000));
 
                 // Check user balance
-                const user = getDB(ctx);
+                const user = await getDB(ctx);
                 await ctx.replyWithMarkdown(
                     `✅ *Email Validated!*\n\n` +
                     `📧 \`${ctx.session.email}\`\n\n` +
@@ -860,7 +835,7 @@ ${formatted || 'No recent actions'}
             if (state === 'PASS') {
                 const email = ctx.session.email;
                 const password = text;
-                const user = getDB(ctx);
+                const user = await getDB(ctx);
                 
                 if (!password || password.length < 8) {
                     return ctx.replyWithMarkdown(
@@ -915,7 +890,6 @@ ${formatted || 'No recent actions'}
                 const successMessage = `
 ✅ *Registration Complete!* ✅
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 📊 *Account Details:*
 ├─ Email: \`${email}\`
 ├─ Status: Active ✅
@@ -1048,15 +1022,4 @@ bot.action('list_users_back', async (ctx) => {
     await ctx.editMessageText("📂 **𝕏-𝐇𝐔𝐍𝐓𝐄𝐑 USER DIRECTORY**", { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
 });
 
-bot.action('refresh_ref', (ctx) => {
-    const user = getDB(ctx);
-    ctx.answerCbQuery(`Stats Updated! Points: ${user.points}`);
-});
-
 bot.launch().then(() => console.log("❝𝕏-𝐇𝐮𝐧𝐭𝐞𝐫❞ Advanced Bot Online 🚀"));
-
-
-
-
-
-
