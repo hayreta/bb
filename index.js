@@ -1,9 +1,9 @@
-const { Telegraf, Markup, session } = require('telegraf');
-const { createClient } = require('@supabase/supabase-js');
+import { Telegraf, Markup, session } from 'telegraf';
+import { createClient } from '@supabase/supabase-js';
 
 /* ================= CONFIG ================= */
 
-const BOT_TOKEN = process.env.BOT_TOKEN; // ⚠️ keep token in env
+const BOT_TOKEN = 8539976683:AAFGvM_GdKbZmR6zFxZolY-jqFak1-KpWe4; // ⚠️ keep token in env
 const ADMIN_ID = 5522724001;
 const BOT_USERNAME = 'createUnlimitedGmail_Bot';
 
@@ -336,28 +336,6 @@ bot.action('main_menu', async (ctx) => {
     await ctx.answerCbQuery();
     await ctx.reply("Returning to Main Menu...", getMenu(ctx));
 });
-
-const link = `https://t.me/${BOT_USERNAME}?start=${ctx.from.id}`;
-const totalEarned = (user.referrals || 0) * 1;
-    
-await ctx.answerCbQuery("Stats Updated! ✅");
-await ctx.editMessageText(
-    `✨ **𝕏-𝐇𝐔𝐍𝐓𝐄𝐑 AFFILIATE CENTER** ✨\n` +
-    `━━━━━━━━━━━━━━━━━━\n` +
-    `👤 **User:** ${user.name}\n` +
-    `👥 **Total Referrals:** \`${user.referrals || 0}\`\n` +
-    `💰 **Total Earned:** \`${totalEarned} Points\`\n` +
-    `━━━━━━━━━━━━━━━━━━\n` +
-    `🎁 **Reward:** \`1 Point\` per join!\n\n` +
-    `🔗 **Your Unique Link:**\n\`${link}\``,
-    {
-        parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-            [Markup.button.url("📤 Share Invite Link", `https://t.me/share/url?url=${encodeURIComponent(link)}`)],
-            [Markup.button.callback("📊 Refresh Stats", "refresh_ref"), Markup.button.callback("🔙 Back", "main_menu")]
-        ])
-    }
-);
 
 // --- HELP MESSAGE HANDLER ---
 bot.hears('🏥 Help', async (ctx) => {
@@ -1022,4 +1000,14 @@ bot.action('list_users_back', async (ctx) => {
     await ctx.editMessageText("📂 **𝕏-𝐇𝐔𝐍𝐓𝐄𝐑 USER DIRECTORY**", { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
 });
 
-bot.launch().then(() => console.log("❝𝕏-𝐇𝐮𝐧𝐭𝐞𝐫❞ Advanced Bot Online 🚀"));
+(async () => {
+    try {
+        await bot.launch();
+        console.log("❝𝕏-𝐇𝐮𝐧𝐭𝐞𝐫❞ Advanced Bot Online 🚀");
+        process.once('SIGINT', () => bot.stop('SIGINT'));
+        process.once('SIGTERM', () => bot.stop('SIGTERM'));
+    } catch (error) {
+        console.error('Bot launch failed:', error);
+        process.exit(1);
+    }
+})();
