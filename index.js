@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 /* ================= CONFIG ================= */
 
-const BOT_TOKEN = 8539976683:AAFGvM_GdKbZmR6zFxZolY-jqFak1-KpWe4; // ⚠️ keep token in env
+const BOT_TOKEN = process.env.BOT_TOKEN; // ⚠️ keep token in env
 const ADMIN_ID = 5522724001;
 const BOT_USERNAME = 'createUnlimitedGmail_Bot';
 
@@ -328,13 +328,6 @@ bot.action('refresh_ref', async (ctx) => {
     } catch (e) {
         // If nothing changed, Telegram might throw an error, we ignore it
     }
-});
-
-// --- CALLBACK QUERY HANDLERS (To make buttons work) ---
-
-bot.action('main_menu', async (ctx) => {
-    await ctx.answerCbQuery();
-    await ctx.reply("Returning to Main Menu...", getMenu(ctx));
 });
 
 // --- HELP MESSAGE HANDLER ---
