@@ -1,0 +1,17 @@
+{
+  "name": " createUnlimitedGmail Bott",
+  "version": "1.0.0",
+  "description": "Premium Gmail Registration Bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.93.1",
+    "dotenv": "^17.2.3",
+    "telegraf": "^4.16.3"
+  }
+}
