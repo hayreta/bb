@@ -1,34 +1,58 @@
 const { Telegraf, Markup, session } = require('telegraf');
+const { createClient } = require('@supabase/supabase-js');
 
-// CONFIGURATION
-const BOT_TOKEN = process.env.BOT_TOKEN || '8539976683:AAE02vIE0M_YxpKKluoYNQHsogNz-fYfks8';
+/* ================= CONFIG ================= */
+
+const BOT_TOKEN = process.env.BOT_TOKEN; // ⚠️ keep token in env
 const ADMIN_ID = 5522724001;
-const BOT_USERNAME = 'createUnlimitedGmail_Bot'; 
+const BOT_USERNAME = 'createUnlimitedGmail_Bot';
+
+const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_KEY
+);
 
 const bot = new Telegraf(BOT_TOKEN);
-const db = {}; // In-memory database
 bot.use(session());
 
-// DATABASE SIMULATION
-const getDB = (ctx) => {
-    const id = (typeof ctx === 'object' && ctx.from) ? ctx.from.id : ctx;
-    if (!db[id]) {
-        db[id] = { 
-            points: 0, 
-            referrals: 0, 
-            registered: 0, 
-            joined: new Date(),
-            name: (ctx.from?.first_name) || "User",
-            username: ctx.from?.username ? `@${ctx.from.username}` : "No Username"
-        };
-    }
-    return db[id];
+const CHANNELS = [
+    '@Unlimited_GmailA',
+    '@Global_OnlineWork',
+    '@AbModded_File',
+    '@Canva_Pro_Teams_Links'
+];
+
+/* ================= DATABASE ================= */
+
+const getDB = async (ctxOrId) => {
+    const userId = typeof ctxOrId === 'object' ? ctxOrId.from.id : ctxOrId;
+
+    const { data } = await supabase
+        .from('users')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+    if (data) return data;
+
+    const ctx = typeof ctxOrId === 'object' ? ctxOrId : null;
+
+    const newUser = {
+        user_id: userId,
+        points: 0,
+        referrals: 0,
+        referred_by: null,
+        joined: new Date(),
+        name: ctx?.from?.first_name || 'User',
+        username: ctx?.from?.username ? `@${ctx.from.username}` : 'No Username'
+    };
+
+    await supabase.from('users').insert(newUser);
+    return newUser;
 };
 
-const CHANNELS = ['@Unlimited_GmailA','@Global_OnlineWork','@AbModded_File','@Canva_Pro_Teams_Links'];
+/* ================= KEYBOARDS ================= */
 
-
-// --- KEYBOARDS ---
 const getMenu = (ctx) => {
     let buttons = [
         ['➕ Register New Gmail'],
@@ -47,78 +71,112 @@ const adminKeyboard = Markup.keyboard([
     ['👥 List All Users', '⬅️ Back to User Menu']
 ]).resize();
 
-const cancelKeyboard = Markup.keyboard([['❌ Cancel Operation']]).resize();
+/* ================= FORCE JOIN ================= */
 
-// --- MIDDLEWARE: FORCE JOIN CHECK ---
 async function checkJoin(ctx, next) {
-    if (ctx.from.id === ADMIN_ID) return next(); 
-    
-    let joinedAll = true;
+    if (ctx.from.id === ADMIN_ID) return next();
+
     for (const chan of CHANNELS) {
         try {
             const member = await ctx.telegram.getChatMember(chan, ctx.from.id);
-            if (['left', 'kicked'].includes(member.status)) {
-                joinedAll = false;
-                break;
-            }
-        } catch (e) { 
-            joinedAll = false;
-            break;
+            if (['left', 'kicked'].includes(member.status)) throw new Error();
+        } catch {
+            return ctx.replyWithPhoto(
+                { url: 'https://hayre32.wordpress.com/wp-content/uploads/2026/01/image_2026-01-24_114307874.png' },
+                {
+                    caption: `⛔️ *ACCESS DENIED*\n\nJoin all channels to continue.`,
+                    parse_mode: 'Markdown',
+                    ...Markup.inlineKeyboard([
+                        [
+                            Markup.button.url("Channel 1", "https://t.me/Unlimited_GmailA"),
+                            Markup.button.url("Channel 2", "https://t.me/Global_OnlineWork")
+                        ],
+                        [
+                            Markup.button.url("Channel 3", "https://t.me/AbModded_File"),
+                            Markup.button.url("Channel 4", "https://t.me/Canva_Pro_Teams_Links")
+                        ],
+                        [Markup.button.callback("Verify Membership ✅", "verify_and_delete")]
+                    ])
+                }
+            );
         }
-    }
-
-    if (!joinedAll) {
-        return ctx.replyWithPhoto(
-            { url: 'https://hayre32.wordpress.com/wp-content/uploads/2026/01/image_2026-01-24_114307874.png' },
-            {
-                caption: `⛔️ **ACCESS DENIED**\n\nYou must join our official channels to use this bot's premium features.`,
-                parse_mode: 'Markdown',
-                ...Markup.inlineKeyboard([
-                [Markup.button.url("Channel 1", "https://t.me/Unlimited_GmailA"), Markup.button.url("Channel 2", "https://t.me/Global_OnlineWork")],
-                [Markup.button.url("Channel 3", "https://t.me/AbModded_File"), Markup.button.url("Channel 4", "https://t.me/Canva_Pro_Teams_Links")],
-                [Markup.button.callback("Verify Membership ✅", "verify_and_delete")]
-                ])
-            }
-        );
     }
     return next();
 }
 
-// --- CALLBACK: VERIFY AND DELETE ---
+/* ================= VERIFY CALLBACK ================= */
+
 bot.action('verify_and_delete', async (ctx) => {
-    let joinedAll = true;
     for (const chan of CHANNELS) {
         try {
             const member = await ctx.telegram.getChatMember(chan, ctx.from.id);
             if (['left', 'kicked'].includes(member.status)) {
-                joinedAll = false;
-                break;
+                return ctx.answerCbQuery("❌ Join all channels!", { show_alert: true });
             }
-        } catch (e) { 
-            joinedAll = false;
-            break;
+        } catch {
+            return ctx.answerCbQuery("❌ Join all channels!", { show_alert: true });
         }
     }
 
-    if (joinedAll) {
+    try { await ctx.deleteMessage(); } catch {}
+
+    const user = await getDB(ctx);
+
+    await ctx.answerCbQuery("Success! Welcome ✅");
+
+    await ctx.replyWithPhoto(
+        { url: 'https://hayre32.wordpress.com/wp-content/uploads/2026/01/image_2026-01-24_114307874.png' },
+        {
+            caption:
+`👋 *Welcome to ❝𝕏-𝐇𝐮𝐧𝐭𝐞𝐫❞*
+
+👤 *User:* ${user.name}
+💰 *Balance:* \`${user.points} Points\`
+
+Invite friends to earn points!`,
+            parse_mode: 'Markdown',
+            ...getMenu(ctx)
+        }
+    );
+});
+
+/* ================= START COMMAND ================= */
+
+bot.start(checkJoin, async (ctx) => {
+    const user = await getDB(ctx);
+    const refId = ctx.payload;
+
+    if (refId && refId != ctx.from.id && !user.referred_by) {
+        await supabase
+            .from('users')
+            .update({ referred_by: refId })
+            .eq('user_id', ctx.from.id);
+
+        await supabase.rpc('add_referral', { ref_user_id: refId });
+
         try {
-            await ctx.deleteMessage(); 
-        } catch (e) {}
-        
-        const user = getDB(ctx);
-        await ctx.answerCbQuery("Success! Welcome to ❝𝕏-𝐇𝐮𝐧𝐭𝐞𝐫❞ ✅");
-        
-        await ctx.replyWithPhoto(
-            { url: 'https://hayre32.wordpress.com/wp-content/uploads/2026/01/image_2026-01-24_114307874.png' },
-            {
-                caption: `👋 *Welcome to ❝𝕏-𝐇𝐮𝐧𝐭𝐞𝐫❞*\n\n👤 **User:** ${user.name}\n💰 **Starting Balance:** \`0 Points\`\n\nInvite friends to earn points!`,
-                parse_mode: 'Markdown',
-                ...getMenu(ctx)
-            }
-        );
-    } else {
-        await ctx.answerCbQuery("❌ You still haven't joined all channels!", { show_alert: true });
+            await bot.telegram.sendMessage(
+                refId,
+                `🔔 *Referral Alert!*\nYou earned +1 Point.`,
+                { parse_mode: 'Markdown' }
+            );
+        } catch {}
     }
+
+    await ctx.replyWithPhoto(
+        { url: 'https://hayre32.wordpress.com/wp-content/uploads/2026/01/image_2026-01-24_114307874.png' },
+        {
+            caption:
+`👋 *Welcome to ❝𝕏-𝐇𝐮𝐧𝐭𝐞𝐫❞*
+
+👤 *User:* ${user.name}
+💰 *Balance:* \`${user.points} Points\`
+
+Invite friends to earn points!`,
+            parse_mode: 'Markdown',
+            ...getMenu(ctx)
+        }
+    );
 });
 
 // --- START COMMAND ---
