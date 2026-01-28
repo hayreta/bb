@@ -5,7 +5,6 @@ import dotenv from 'dotenv';
 // Load environment variables from .env file
 dotenv.config();
 
-
 /* ================= CONFIG ================= */
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -624,29 +623,44 @@ ${stats.bottomUsers.map((u, i) => `${i + 1}. ${u.name} (@${u.username}) • ${u.
             return ctx.reply('⏱️ **Rate Limit:** Too many broadcasts. Please wait before trying again.');
         }
 
-        const targets = targetIds || Object.keys(this.db);
-        let sent = 0, failed = 0;
-
-        await ctx.reply(`📡 **Broadcasting to ${targets.length} users...**\n\n⏳ Processing...`);
-
-        for (const userId of targets) {
-            try {
-                await ctx.telegram.copyMessage(userId, ctx.chat.id, messageId);
-                sent++;
-            } catch (e) {
-                failed++;
-                console.error(`Failed to send to ${userId}:`, e.message);
+        try {
+            // Get targets from Supabase if not provided
+            let targets = targetIds;
+            if (!targets) {
+                const users = await getAllUsersDB();
+                targets = users.map(u => u.user_id);
             }
+
+            if (!targets || targets.length === 0) {
+                return ctx.reply('❌ No users found for broadcast.');
+            }
+
+            let sent = 0, failed = 0;
+
+            await ctx.reply(`📡 **Broadcasting to ${targets.length} users...**\n\n⏳ Processing...`);
+
+            for (const userId of targets) {
+                try {
+                    await ctx.telegram.copyMessage(userId, ctx.chat.id, messageId);
+                    sent++;
+                } catch (e) {
+                    failed++;
+                    console.error(`Failed to send to ${userId}:`, e.message);
+                }
+            }
+
+            this.logAdminAction('BROADCAST', { sent, failed, total: targets.length });
+
+            return ctx.reply(
+                `✅ **BROADCAST COMPLETE**\n\n` +
+                `✔️ Sent: ${sent}\n` +
+                `❌ Failed: ${failed}\n` +
+                `📊 Success Rate: ${((sent / targets.length) * 100).toFixed(1)}%`
+            );
+        } catch (err) {
+            console.error('[ADMIN] Error broadcasting:', err.message);
+            return ctx.reply('❌ Error during broadcast: ' + err.message);
         }
-
-        this.logAdminAction('BROADCAST', { sent, failed, total: targets.length });
-
-        return ctx.reply(
-            `✅ **BROADCAST COMPLETE**\n\n` +
-            `✔️ Sent: ${sent}\n` +
-            `❌ Failed: ${failed}\n` +
-            `📊 Success Rate: ${((sent / targets.length) * 100).toFixed(1)}%`
-        );
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -908,7 +922,7 @@ ${formatted || 'No recent actions'}
         this.bot.on('message', async (ctx, next) => {
             const state = ctx.session?.step;
             if (!state) return next();
-
+            
             const text = ctx.message?.text;
 
             // Gmail Registration Logic - Handle both admin and regular users
@@ -1036,19 +1050,24 @@ ${formatted || 'No recent actions'}
 
             // Search Logic
             if (state === 'SEARCH_QUERY') {
-                const results = this.searchUsers(text);
-                if (results.length === 0) {
-                    ctx.reply('❌ No users found.');
+                try {
+                    const results = await this.searchUsers(text);
+                    if (!results || results.length === 0) {
+                        ctx.reply('❌ No users found.');
+                        ctx.session.step = 'SEARCH_QUERY';
+                        return;
+                    }
+
+                    const buttons = results.map(user =>
+                        [Markup.button.callback(`${user.name} (@${user.username})`, `view_prof:${user.user_id}`)]
+                    );
+
+                    ctx.replyWithMarkdown(`🔍 **Found ${results.length} results:**`, Markup.inlineKeyboard(buttons));
+                    ctx.session = {};
+                } catch (err) {
+                    ctx.reply('❌ Error searching users: ' + err.message);
                     ctx.session.step = 'SEARCH_QUERY';
-                    return;
                 }
-
-                const buttons = results.map(user =>
-                    [Markup.button.callback(`${user.name} (@${user.username})`, `view_prof:${user.id}`)]
-                );
-
-                ctx.replyWithMarkdown(`🔍 **Found ${results.length} results:**`, Markup.inlineKeyboard(buttons));
-                ctx.session = {};
             }
 
             // Broadcast
@@ -1067,59 +1086,82 @@ ${formatted || 'No recent actions'}
 
             // Add/Remove Points
             if (state === 'ADD_POINTS_ID') {
-                if (!this.db[text]) {
-                    return ctx.reply('❌ User not found.');
+                try {
+                    const user = await getDB(parseInt(text));
+                    if (!user) {
+                        return ctx.reply('❌ User not found.');
+                    }
+                    ctx.session.targetId = text;
+                    ctx.session.step = 'ADD_POINTS_AMT';
+                    return ctx.reply('💰 **Enter points amount:**', this.getCancelKeyboard());
+                } catch (err) {
+                    return ctx.reply('❌ Error checking user: ' + err.message);
                 }
-                ctx.session.targetId = text;
-                ctx.session.step = 'ADD_POINTS_AMT';
-                return ctx.reply('💰 **Enter points amount:**', this.getCancelKeyboard());
             }
 
             if (state === 'ADD_POINTS_AMT') {
-                const amount = parseInt(text);
-                if (isNaN(amount) || amount < 0) {
-                    return ctx.reply('❌ Enter a valid positive number.');
+                try {
+                    const amount = parseInt(text);
+                    if (isNaN(amount) || amount < 0) {
+                        return ctx.reply('❌ Enter a valid positive number.');
+                    }
+                    const result = await this.updateUserPoints(ctx.session.targetId, amount, 'Admin manual addition');
+                    ctx.session = {};
+                    return ctx.reply(`✅ Added ${amount} points to user ${result.userId}`, this.getMainAdminKeyboard());
+                } catch (err) {
+                    return ctx.reply('❌ Error adding points: ' + err.message);
                 }
-                const result = this.updateUserPoints(ctx.session.targetId, amount, 'Admin manual addition');
-                ctx.session = {};
-                return ctx.reply(`✅ Added ${amount} points to user ${result.userId}`, this.getMainAdminKeyboard());
             }
 
             if (state === 'REM_POINTS_ID') {
-                if (!this.db[text]) {
-                    return ctx.reply('❌ User not found.');
+                try {
+                    const user = await getDB(parseInt(text));
+                    if (!user) {
+                        return ctx.reply('❌ User not found.');
+                    }
+                    ctx.session.targetId = text;
+                    ctx.session.step = 'REM_POINTS_AMT';
+                    return ctx.reply('💰 **Enter points to remove:**', this.getCancelKeyboard());
+                } catch (err) {
+                    return ctx.reply('❌ Error checking user: ' + err.message);
                 }
-                ctx.session.targetId = text;
-                ctx.session.step = 'REM_POINTS_AMT';
-                return ctx.reply('💰 **Enter points to remove:**', this.getCancelKeyboard());
             }
 
             if (state === 'REM_POINTS_AMT') {
-                const amount = parseInt(text);
-                if (isNaN(amount) || amount < 0) {
-                    return ctx.reply('❌ Enter a valid positive number.');
+                try {
+                    const amount = parseInt(text);
+                    if (isNaN(amount) || amount < 0) {
+                        return ctx.reply('❌ Enter a valid positive number.');
+                    }
+                    const result = await this.updateUserPoints(ctx.session.targetId, -amount, 'Admin manual removal');
+                    ctx.session = {};
+                    return ctx.reply(`✅ Removed ${amount} points from user ${result.userId}`, this.getMainAdminKeyboard());
+                } catch (err) {
+                    return ctx.reply('❌ Error removing points: ' + err.message);
                 }
-                const result = this.updateUserPoints(ctx.session.targetId, -amount, 'Admin manual removal');
-                ctx.session = {};
-                return ctx.reply(`✅ Removed ${amount} points from user ${result.userId}`, this.getMainAdminKeyboard());
             }
         });
 
         // Callback for user profile viewing
-        this.bot.action(/view_prof:(.+)/, (ctx) => {
+        this.bot.action(/view_prof:(.+)/, async (ctx) => {
             if (!this.isAdmin(ctx)) return ctx.answerCbQuery('❌ Access denied');
             
-            const profile = this.getUserProfile(ctx.match[1]);
-            if (!profile) return ctx.answerCbQuery('❌ User not found');
-            
-            ctx.replyWithMarkdown(this.formatUserProfile(profile));
-            ctx.answerCbQuery();
+            try {
+                const profile = await this.getUserProfile(ctx.match[1]);
+                if (!profile) return ctx.answerCbQuery('❌ User not found');
+                
+                ctx.replyWithMarkdown(this.formatUserProfile(profile));
+                ctx.answerCbQuery();
+            } catch (err) {
+                ctx.answerCbQuery('❌ Error loading profile');
+                console.error('[ADMIN] Error viewing profile:', err.message);
+            }
         });
     }
 }
 
 // Initialize Admin Panel
-const adminPanel = new AdvancedAdminPanel(bot, db, ADMIN_ID);
+const adminPanel = new AdvancedAdminPanel(bot, ADMIN_ID);
 
 // --- CALLBACK HANDLERS ---
 bot.action(/quick_add:(.+)/, (ctx) => {
