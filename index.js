@@ -169,9 +169,7 @@ const getMenu = (ctx) => {
     if (ctx.from.id === ADMIN_ID) {
         buttons.push(['🛠 Admin Panel']);
     }
-    return Markup.keyboard(buttons)
-        .resize()
-        .one_time_keyboard(false);
+    return Markup.keyboard(buttons).resize();
 };
 
 const adminKeyboard = Markup.keyboard([
@@ -179,15 +177,11 @@ const adminKeyboard = Markup.keyboard([
     ['➕ Add Points', '➖ Remove Points'],
     ['👥 List All Users'],
     ['⬅️ Back to User Menu']
-])
-    .resize()
-    .one_time_keyboard(false);
+]).resize();
 
 const cancelKeyboard = Markup.keyboard([
     ['❌ Cancel Operation']
-])
-    .resize()
-    .one_time_keyboard(true);
+]).resize();
 
 /* ================= FORCE JOIN ================= */
 
@@ -790,9 +784,7 @@ ${formatted || 'No recent actions'}
             ['💰 Manage Points', '👥 User Directory'],
             ['🔍 Search User', '📋 Action Logs'],
             ['⬅️ Back to User Menu']
-        ])
-            .resize()
-            .one_time_keyboard(false);
+        ]).resize();
     }
 
     getPointsKeyboard() {
@@ -800,26 +792,20 @@ ${formatted || 'No recent actions'}
             ['➕ Add Points', '➖ Remove Points'],
             ['📊 Bulk Update'],
             ['⬅️ Back to Admin Menu']
-        ])
-            .resize()
-            .one_time_keyboard(false);
+        ]).resize();
     }
 
     getSearchKeyboard() {
         return Markup.keyboard([
             ['🔄 New Search'],
             ['⬅️ Back to Admin Menu']
-        ])
-            .resize()
-            .one_time_keyboard(false);
+        ]).resize();
     }
 
     getCancelKeyboard() {
         return Markup.keyboard([
             ['❌ Cancel Operation']
-        ])
-            .resize()
-            .one_time_keyboard(true);
+        ]).resize();
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1219,4 +1205,3 @@ bot.action('list_users_back', async (ctx) => {
         process.exit(1);
     }
 })();
-
