@@ -36,8 +36,6 @@ const CHANNELS = [
     '@Canva_Pro_Teams_Links'
 ];
 
-const db = {}; // Declare db variable
-
 /* ================= DATABASE ================= */
 
 const getDB = async (ctxOrId) => {
@@ -171,18 +169,25 @@ const getMenu = (ctx) => {
     if (ctx.from.id === ADMIN_ID) {
         buttons.push(['🛠 Admin Panel']);
     }
-    return Markup.keyboard(buttons).resize();
+    return Markup.keyboard(buttons)
+        .resize()
+        .one_time_keyboard(false);
 };
 
 const adminKeyboard = Markup.keyboard([
     ['📊 Global Stats', '📢 Broadcast'],
     ['➕ Add Points', '➖ Remove Points'],
-    ['👥 List All Users', '⬅️ Back to User Menu']
-]).resize();
+    ['👥 List All Users'],
+    ['⬅️ Back to User Menu']
+])
+    .resize()
+    .one_time_keyboard(false);
 
 const cancelKeyboard = Markup.keyboard([
     ['❌ Cancel Operation']
-]).resize(); // Declare cancelKeyboard variable
+])
+    .resize()
+    .one_time_keyboard(true);
 
 /* ================= FORCE JOIN ================= */
 
@@ -200,15 +205,11 @@ async function checkJoin(ctx, next) {
                     caption: `⛔️ *ACCESS DENIED*\n\nJoin all channels to continue.`,
                     parse_mode: 'Markdown',
                     ...Markup.inlineKeyboard([
-                        [
-                            Markup.button.url("Channel 1", "https://t.me/Unlimited_GmailA"),
-                            Markup.button.url("Channel 2", "https://t.me/Global_OnlineWork")
-                        ],
-                        [
-                            Markup.button.url("Channel 3", "https://t.me/AbModded_File"),
-                            Markup.button.url("Channel 4", "https://t.me/Canva_Pro_Teams_Links")
-                        ],
-                        [Markup.button.callback("Verify Membership ✅", "verify_and_delete")]
+                        [Markup.button.url("📢 Channel 1", "https://t.me/Unlimited_GmailA")],
+                        [Markup.button.url("📢 Channel 2", "https://t.me/Global_OnlineWork")],
+                        [Markup.button.url("📢 Channel 3", "https://t.me/AbModded_File")],
+                        [Markup.button.url("📢 Channel 4", "https://t.me/Canva_Pro_Teams_Links")],
+                        [Markup.button.callback("✅ Verify Membership", "verify_and_delete")]
                     ])
                 }
             );
@@ -310,10 +311,8 @@ bot.hears('➕ Register New Gmail', checkJoin, async (ctx) => {
             `🎁 Daily Bonus → +1 Point daily\n` +
             `👑 Premium Tasks → +2-5 Points`,
             Markup.inlineKeyboard([
-                [
-                    Markup.button.callback("🚸 Invite Friends", "show_referral_link"),
-                    Markup.button.callback("🔙 Back", "main_menu")
-                ]
+                [Markup.button.callback("🚸 Invite Friends", "show_referral_link")],
+                [Markup.button.callback("🔙 Back", "main_menu")]
             ])
         );
     }
@@ -367,10 +366,8 @@ bot.hears('🚸 My Referrals', async (ctx) => {
         `🔗 **Your Unique Link:**\n\`${link}\``, 
         Markup.inlineKeyboard([
             [Markup.button.url("📤 Share Invite Link", `https://t.me/share/url?url=${encodeURIComponent(link)}`)],
-            [
-                Markup.button.callback("📊 Refresh Stats", "refresh_ref"),
-                Markup.button.callback("🔙 Back", "main_menu")
-            ]
+            [Markup.button.callback("📊 Refresh Stats", "refresh_ref")],
+            [Markup.button.callback("🔙 Back", "main_menu")]
         ])
     );
 });
@@ -428,7 +425,8 @@ bot.action('refresh_ref', async (ctx) => {
                 parse_mode: 'Markdown',
                 ...Markup.inlineKeyboard([
                     [Markup.button.url("📤 Share Invite Link", `https://t.me/share/url?url=${encodeURIComponent(link)}`)],
-                    [Markup.button.callback("📊 Refresh Stats", "refresh_ref"), Markup.button.callback("🔙 Back", "main_menu")]
+                    [Markup.button.callback("📊 Refresh Stats", "refresh_ref")],
+                    [Markup.button.callback("🔙 Back", "main_menu")]
                 ])
             }
         );
@@ -454,7 +452,7 @@ bot.hears('🏥 Help', async (ctx) => {
 
     await ctx.replyWithMarkdown(helpMessage, 
         Markup.inlineKeyboard([
-            [Markup.button.callback("🗑️ Mark as Read & Close", "close_help")]
+            [Markup.button.callback("🗑️ Close Help", "close_help")]
         ])
     );
 });
@@ -792,26 +790,36 @@ ${formatted || 'No recent actions'}
             ['💰 Manage Points', '👥 User Directory'],
             ['🔍 Search User', '📋 Action Logs'],
             ['⬅️ Back to User Menu']
-        ]).resize();
+        ])
+            .resize()
+            .one_time_keyboard(false);
     }
 
     getPointsKeyboard() {
         return Markup.keyboard([
             ['➕ Add Points', '➖ Remove Points'],
-            ['📊 Bulk Update', '⬅️ Back to Admin Menu']
-        ]).resize();
+            ['📊 Bulk Update'],
+            ['⬅️ Back to Admin Menu']
+        ])
+            .resize()
+            .one_time_keyboard(false);
     }
 
     getSearchKeyboard() {
         return Markup.keyboard([
-            ['🔄 New Search', '⬅️ Back to Admin Menu']
-        ]).resize();
+            ['🔄 New Search'],
+            ['⬅️ Back to Admin Menu']
+        ])
+            .resize()
+            .one_time_keyboard(false);
     }
 
     getCancelKeyboard() {
         return Markup.keyboard([
             ['❌ Cancel Operation']
-        ]).resize();
+        ])
+            .resize()
+            .one_time_keyboard(true);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -890,11 +898,18 @@ ${formatted || 'No recent actions'}
                 if (!users || users.length === 0) return ctx.reply('📭 Database is empty.');
                 
                 const buttons = users.slice(0, 50).map(user => 
-                    [Markup.button.callback(`👤 ${user.name} | 💰 ${user.points}`, `view_prof:${user.user_id}`)]
+                    [Markup.button.callback(`${user.name || 'User'} - 💰 ${user.points}`, `view_prof:${user.user_id}`)]
                 );
                 
-                ctx.replyWithMarkdown('📂 **USER DIRECTORY**', Markup.inlineKeyboard(buttons));
-                this.logAdminAction('VIEW_DIRECTORY', { count: users.length });
+                if (buttons.length > 0) {
+                    ctx.replyWithMarkdown(
+                        `📂 **USER DIRECTORY** (${users.length} total)\n━━━━━━━━━━━━━━━━`,
+                        Markup.inlineKeyboard(buttons)
+                    );
+                    this.logAdminAction('VIEW_DIRECTORY', { count: users.length });
+                } else {
+                    ctx.reply('❌ No users found.');
+                }
             } catch (err) {
                 ctx.reply('❌ Error loading user directory');
                 console.error('[ADMIN] Error loading directory:', err.message);
@@ -1058,11 +1073,17 @@ ${formatted || 'No recent actions'}
                         return;
                     }
 
-                    const buttons = results.map(user =>
-                        [Markup.button.callback(`${user.name} (@${user.username})`, `view_prof:${user.user_id}`)]
+                    const buttons = results.slice(0, 20).map(user =>
+                        [Markup.button.callback(
+                            `${user.name || 'User'} - @${user.username || 'N/A'}`,
+                            `view_prof:${user.user_id}`
+                        )]
                     );
 
-                    ctx.replyWithMarkdown(`🔍 **Found ${results.length} results:**`, Markup.inlineKeyboard(buttons));
+                    ctx.replyWithMarkdown(
+                        `🔍 **Found ${results.length} results:**\n━━━━━━━━━━━━━━━━`,
+                        Markup.inlineKeyboard(buttons)
+                    );
                     ctx.session = {};
                 } catch (err) {
                     ctx.reply('❌ Error searching users: ' + err.message);
@@ -1182,8 +1203,8 @@ bot.action(/quick_rem:(.+)/, (ctx) => {
 
 bot.action('list_users_back', async (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return ctx.answerCbQuery('❌ Access denied');
-    const userIds = Object.keys(db);
-    const buttons = userIds.map(id => [Markup.button.callback(`👤 ID: ${id} | 💰 ${db[id].points} pts`, `view_prof:${id}`)]);
+    const userIds = Object.keys(await getAllUsersDB());
+    const buttons = userIds.map(id => [Markup.button.callback(`👤 ID: ${id} | 💰 ${getDB(id).points} pts`, `view_prof:${id}`)]);
     await ctx.editMessageText("📂 **𝕏-𝐇𝐔𝐍𝐓𝐄𝐑 USER DIRECTORY**", { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
 });
 
@@ -1198,3 +1219,4 @@ bot.action('list_users_back', async (ctx) => {
         process.exit(1);
     }
 })();
+
