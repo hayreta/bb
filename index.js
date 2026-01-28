@@ -46,7 +46,7 @@ const getDB = async (ctxOrId) => {
 
     const { data, error } = await supabase
       .from('users')
-      .select('user_id, points, referrals, referred_by, joined, name, username')
+      .select('user_id, points, referrals, referred_by, joined, name, username, registered, last_active')
       .eq('user_id', userId)
       .single();
 
@@ -59,22 +59,105 @@ const getDB = async (ctxOrId) => {
           points: 0,
           referrals: 0,
           referred_by: null,
-          joined: new Date(),
+          registered: 0,
+          joined: new Date().toISOString(),
+          last_active: new Date().toISOString(),
           name: ctx?.from?.first_name || 'User',
           username: ctx?.from?.username ? `@${ctx.from.username}` : 'No Username'
         };
 
-        const { error: insertError } = await supabase.from('users').insert([newUser]);
+        const { data: insertedUser, error: insertError } = await supabase
+          .from('users')
+          .insert([newUser])
+          .select()
+          .single();
+        
         if (insertError) throw insertError;
-        return newUser;
+        return insertedUser;
       }
       throw error;
     }
+
+    // Update last_active timestamp
+    await supabase
+      .from('users')
+      .update({ last_active: new Date().toISOString() })
+      .eq('user_id', userId)
+      .catch(err => console.error('[DB] Error updating last_active:', err.message));
 
     return data;
   } catch (err) {
     console.error('[DB] Error fetching/creating user:', err.message);
     throw err;
+  }
+};
+
+// Update user points in database
+const updateUserPointsDB = async (userId, pointsToAdd, reason = 'Manual adjustment') => {
+  try {
+    const { data: userData, error: fetchError } = await supabase
+      .from('users')
+      .select('points')
+      .eq('user_id', userId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const newPoints = Math.max(0, (userData?.points || 0) + pointsToAdd);
+
+    const { data: updatedUser, error: updateError } = await supabase
+      .from('users')
+      .update({ points: newPoints })
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    // Log admin action
+    await supabase.from('admin_logs').insert([{
+      admin_id: ADMIN_ID,
+      action: 'POINTS_UPDATE',
+      details: { userId, newPoints, pointsToAdd, reason }
+    }]).catch(err => console.error('[DB] Error logging action:', err.message));
+
+    return updatedUser;
+  } catch (err) {
+    console.error('[DB] Error updating user points:', err.message);
+    throw err;
+  }
+};
+
+// Get all users from database
+const getAllUsersDB = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .order('points', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('[DB] Error fetching all users:', err.message);
+    return [];
+  }
+};
+
+// Search users in database
+const searchUsersDB = async (query, limit = 20) => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .or(`user_id.eq.${query},name.ilike.%${query}%,username.ilike.%${query}%`)
+      .limit(limit);
+
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('[DB] Error searching users:', err.message);
+    return [];
   }
 };
 /* ================= KEYBOARDS ================= */
@@ -391,9 +474,8 @@ bot.action('close_help', async (ctx) => {
 // ═══════════════════════════════════════════════════════════════════
 
 class AdvancedAdminPanel {
-    constructor(bot, db, adminId) {
+    constructor(bot, adminId) {
         this.bot = bot;
-        this.db = db;
         this.adminId = adminId;
         this.adminLog = [];
         this.rateLimits = new Map();
@@ -444,23 +526,53 @@ class AdvancedAdminPanel {
     // STATISTICS & ANALYTICS
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    getDetailedStats() {
-        const users = Object.values(this.db);
-        
-        return {
-            totalUsers: users.length,
-            totalPoints: users.reduce((sum, u) => sum + u.points, 0),
-            averagePoints: users.length ? (users.reduce((sum, u) => sum + u.points, 0) / users.length).toFixed(2) : 0,
-            topUsers: users.sort((a, b) => b.points - a.points).slice(0, 5),
-            bottomUsers: users.sort((a, b) => a.points - b.points).slice(0, 5),
-            activeToday: users.filter(u => {
-                const lastActive = new Date(u.lastActive || 0);
-                const today = new Date();
-                return lastActive.toDateString() === today.toDateString();
-            }).length,
-            registeredCount: users.length,
-            timestamp: new Date().toLocaleString(),
-        };
+    async getDetailedStats() {
+        try {
+            const users = await getAllUsersDB();
+            
+            if (!users || users.length === 0) {
+                return {
+                    totalUsers: 0,
+                    totalPoints: 0,
+                    averagePoints: 0,
+                    topUsers: [],
+                    bottomUsers: [],
+                    activeToday: 0,
+                    registeredCount: 0,
+                    timestamp: new Date().toLocaleString(),
+                };
+            }
+
+            const today = new Date().toDateString();
+            const activeToday = users.filter(u => {
+                const lastActive = new Date(u.last_active || 0);
+                return lastActive.toDateString() === today;
+            }).length;
+
+            return {
+                totalUsers: users.length,
+                totalPoints: users.reduce((sum, u) => sum + (u.points || 0), 0),
+                averagePoints: users.length ? (users.reduce((sum, u) => sum + (u.points || 0), 0) / users.length).toFixed(2) : 0,
+                topUsers: users.slice(0, 5),
+                bottomUsers: users.slice(-5).reverse(),
+                activeToday,
+                registeredCount: users.length,
+                timestamp: new Date().toLocaleString(),
+            };
+        } catch (err) {
+            console.error('[ADMIN] Error getting stats:', err.message);
+            return {
+                totalUsers: 0,
+                totalPoints: 0,
+                averagePoints: 0,
+                topUsers: [],
+                bottomUsers: [],
+                activeToday: 0,
+                registeredCount: 0,
+                timestamp: new Date().toLocaleString(),
+                error: err.message
+            };
+        }
     }
 
     formatStatsMessage(stats) {
@@ -493,18 +605,13 @@ ${stats.bottomUsers.map((u, i) => `${i + 1}. ${u.name} (@${u.username}) • ${u.
     // USER SEARCH & FILTERING
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    searchUsers(query, limit = 20) {
-        const users = Object.entries(this.db);
-        const lowerQuery = query.toLowerCase();
-
-        return users
-            .filter(([id, user]) => 
-                id.includes(query) ||
-                user.name?.toLowerCase().includes(lowerQuery) ||
-                user.username?.toLowerCase().includes(lowerQuery)
-            )
-            .slice(0, limit)
-            .map(([id, user]) => ({ id, ...user }));
+    async searchUsers(query, limit = 20) {
+        try {
+            return await searchUsersDB(query, limit);
+        } catch (err) {
+            console.error('[ADMIN] Error searching users:', err.message);
+            return [];
+        }
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -545,64 +652,78 @@ ${stats.bottomUsers.map((u, i) => `${i + 1}. ${u.name} (@${u.username}) • ${u.
     // POINTS MANAGEMENT - ADVANCED
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    updateUserPoints(userId, amount, reason = 'Manual adjustment') {
-        if (!this.db[userId]) {
-            return { success: false, error: 'User not found' };
+    async updateUserPoints(userId, amount, reason = 'Manual adjustment') {
+        try {
+            const updatedUser = await updateUserPointsDB(userId, amount, reason);
+            
+            this.logAdminAction('POINTS_UPDATE', {
+                userId,
+                newPoints: updatedUser.points,
+                change: amount,
+                reason
+            });
+
+            return {
+                success: true,
+                userId,
+                newPoints: updatedUser.points,
+                change: amount
+            };
+        } catch (err) {
+            console.error('[ADMIN] Error updating points:', err.message);
+            return { success: false, error: err.message };
         }
-
-        const previousPoints = this.db[userId].points;
-        this.db[userId].points = Math.max(0, this.db[userId].points + amount);
-        
-        const change = this.db[userId].points - previousPoints;
-        this.logAdminAction('POINTS_UPDATE', {
-            userId,
-            previousPoints,
-            newPoints: this.db[userId].points,
-            change,
-            reason
-        });
-
-        return {
-            success: true,
-            userId,
-            previousPoints,
-            newPoints: this.db[userId].points,
-            change
-        };
     }
 
-    bulkUpdatePoints(userIds, amount, reason) {
-        const results = userIds.map(id => this.updateUserPoints(id, amount, reason));
-        const successful = results.filter(r => r.success).length;
+    async bulkUpdatePoints(userIds, amount, reason) {
+        try {
+            const results = await Promise.all(
+                userIds.map(id => this.updateUserPoints(id, amount, reason))
+            );
+            const successful = results.filter(r => r.success).length;
 
-        this.logAdminAction('BULK_POINTS_UPDATE', {
-            total: userIds.length,
-            successful,
-            amount,
-            reason
-        });
+            this.logAdminAction('BULK_POINTS_UPDATE', {
+                total: userIds.length,
+                successful,
+                amount,
+                reason
+            });
 
-        return results;
+            return results;
+        } catch (err) {
+            console.error('[ADMIN] Error bulk updating points:', err.message);
+            return [];
+        }
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // USER MANAGEMENT
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    getUserProfile(userId) {
-        const user = this.db[userId];
-        if (!user) return null;
+    async getUserProfile(userId) {
+        try {
+            const { data: user, error } = await supabase
+                .from('users')
+                .select('*')
+                .eq('user_id', userId)
+                .single();
 
-        const joinDate = new Date(user.joinedAt || Date.now());
-        const lastActive = new Date(user.lastActive || Date.now());
+            if (error || !user) return null;
 
-        return {
-            ...user,
-            userId,
-            joinedDate: joinDate.toLocaleDateString(),
-            lastActiveDate: lastActive.toLocaleDateString(),
-            accountAgeInDays: Math.floor((Date.now() - joinDate) / (1000 * 60 * 60 * 24)),
-        };
+            const joinDate = new Date(user.joined || Date.now());
+            const lastActive = new Date(user.last_active || Date.now());
+
+            return {
+                ...user,
+                userId,
+                joinedDate: joinDate.toLocaleDateString(),
+                lastActiveDate: lastActive.toLocaleDateString(),
+                accountAgeInDays: Math.floor((Date.now() - joinDate) / (1000 * 60 * 60 * 24)),
+            };
+        } catch (err) {
+            console.error('[ADMIN] Error getting user profile:', err.message);
+            return null;
+        }
     }
 
     formatUserProfile(profile) {
@@ -699,9 +820,9 @@ ${formatted || 'No recent actions'}
         });
 
         // Statistics
-        this.bot.hears('📊 Statistics', (ctx) => {
+        this.bot.hears('📊 Statistics', async (ctx) => {
             if (!this.isAdmin(ctx)) return;
-            const stats = this.getDetailedStats();
+            const stats = await this.getDetailedStats();
             ctx.replyWithMarkdown(this.formatStatsMessage(stats));
             this.logAdminAction('VIEW_STATS', {});
         });
@@ -746,17 +867,23 @@ ${formatted || 'No recent actions'}
         });
 
         // User Directory
-        this.bot.hears('👥 User Directory', (ctx) => {
+        this.bot.hears('👥 User Directory', async (ctx) => {
             if (!this.isAdmin(ctx)) return;
-            const userIds = Object.keys(this.db);
-            if (userIds.length === 0) return ctx.reply('📭 Database is empty.');
             
-            const buttons = userIds.slice(0, 50).map(id => 
-                [Markup.button.callback(`👤 ${this.db[id].name} | 💰 ${this.db[id].points}`, `view_prof:${id}`)]
-            );
-            
-            ctx.replyWithMarkdown('📂 **USER DIRECTORY**', Markup.inlineKeyboard(buttons));
-            this.logAdminAction('VIEW_DIRECTORY', { count: userIds.length });
+            try {
+                const users = await getAllUsersDB();
+                if (!users || users.length === 0) return ctx.reply('📭 Database is empty.');
+                
+                const buttons = users.slice(0, 50).map(user => 
+                    [Markup.button.callback(`👤 ${user.name} | 💰 ${user.points}`, `view_prof:${user.user_id}`)]
+                );
+                
+                ctx.replyWithMarkdown('📂 **USER DIRECTORY**', Markup.inlineKeyboard(buttons));
+                this.logAdminAction('VIEW_DIRECTORY', { count: users.length });
+            } catch (err) {
+                ctx.reply('❌ Error loading user directory');
+                console.error('[ADMIN] Error loading directory:', err.message);
+            }
         });
 
         // Back buttons
