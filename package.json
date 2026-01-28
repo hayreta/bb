@@ -1,32 +1,17 @@
 {
-  "name": "createUnlimitedGmail_Bot",
+  "name": " createUnlimitedGmail Bott",
   "version": "1.0.0",
-  "private": true,
-  "type": "module",
+  "description": "Premium Gmail Registration Bot",
+  "main": "index.js",
   "scripts": {
-    "dev": "node index.js",
-    "start": "node index.js",
-    "lint": "eslint ."
+    "start": "node index.js"
   },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
-    "telegraf": "4.16.3",
-    "@supabase/supabase-js": "2.93.2",
-    "dotenv": "17.2.3",
-    "next": "16.1.6",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "class-variance-authority": "0.7.1",
-    "clsx": "2.1.1",
-    "lucide-react": "0.563.0",
-    "tailwind-merge": "3.4.0",
-    "tailwindcss-animate": "1.0.7"
-  },
-  "devDependencies": {
-    "@types/react": "19.2.10",
-    "@types/react-dom": "19.2.3",
-    "@types/node": "25.0.10",
-    "typescript": "5.9.3",
-    "tailwindcss": "4.1.18",
-    "postcss": "8.5.6"
+    "@supabase/supabase-js": "^2.93.1",
+    "dotenv": "^17.2.3",
+    "telegraf": "^4.16.3"
   }
 }
